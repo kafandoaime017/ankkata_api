@@ -1,0 +1,33 @@
+# Reverse proxy pour l'API Ankkata sur un VPS public.
+# Ne sert PAS en développement local (voir docker-compose.yml : le service
+# "caddy" n'est démarré qu'avec --profile prod, voir DEPLOYMENT.md).
+#
+# ------------------------------------------------------------------
+# Mode "domaine" (recommandé — HTTPS automatique via Let's Encrypt) :
+# ------------------------------------------------------------------
+# 1. Pointez un enregistrement DNS A de votre domaine vers l'IP du VPS.
+# 2. Renseignez ANKKATA_DOMAIN=votre-domaine.com dans .env.
+# 3. Laissez la ligne ci-dessous telle quelle : Caddy détecte que
+#    "votre-domaine.com" n'est ni "localhost" ni une IP nue et demande
+#    automatiquement un certificat valide au démarrage. Aucune config TLS
+#    manuelle nécessaire.
+{$ANKKATA_DOMAIN:localhost} {
+	reverse_proxy api:4000
+}
+
+# ------------------------------------------------------------------
+# Mode "test rapide sans domaine" (IP nue, HTTP uniquement) :
+# ------------------------------------------------------------------
+# Si vous n'avez pas encore de domaine et voulez juste tester depuis un
+# second PC, Caddy ne peut pas obtenir de certificat pour une IP nue.
+# Commentez le bloc au-dessus et décommentez celui-ci à la place (remplace
+# XXX.XXX.XXX.XXX par l'IP publique du VPS) :
+#
+# http://XXX.XXX.XXX.XXX {
+# 	reverse_proxy api:4000
+# }
+#
+# Le client Windows pointera alors sur http://XXX.XXX.XXX.XXX/api/v1
+# (voir CLIENT_BUILD.md côté ankata_guichet). Migrez vers le mode domaine
+# dès que possible : sans HTTPS, le jeton JWT et les mots de passe circulent
+# en clair sur le réseau.

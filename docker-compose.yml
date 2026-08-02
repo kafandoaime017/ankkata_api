@@ -1,0 +1,110 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ankkata_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-ankkata}
+      POSTGRES_USER: ${DB_USER:-ankkata}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ankkata_secret}
+    ports:
+      # Lié à 127.0.0.1 uniquement : jamais exposé publiquement, même en
+      # production sur un VPS. Accès distant possible via tunnel SSH — voir
+      # DEPLOYMENT.md. Le reste des conteneurs y accède via le réseau Docker
+      # interne (ankkata_net), ce binding ne les concerne pas.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ankkata} -d ${DB_NAME:-ankkata}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ankkata_net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ankkata_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${PORT:-4000}
+      API_PREFIX: ${API_PREFIX:-/api/v1}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-ankkata}
+      DB_USER: ${DB_USER:-ankkata}
+      DB_PASSWORD: ${DB_PASSWORD:-ankkata_secret}
+      DB_SSL: ${DB_SSL:-false}
+      JWT_SECRET: ${JWT_SECRET:-ankkata_dev_jwt_secret_change_me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-ankkata_dev_refresh_secret_change_me}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-10}
+      LATEST_APP_VERSION: ${LATEST_APP_VERSION:-1.0.0}
+    ports:
+      # Lié à 127.0.0.1 : en local, http://localhost:4000 fonctionne comme
+      # avant. Sur un VPS, le trafic public passe par Caddy (service
+      # ci-dessous), jamais directement sur ce port. Pour un test rapide sans
+      # domaine/HTTPS, voir DEPLOYMENT.md "Mode simple" (remplacer par
+      # "${PORT:-4000}:4000" pour exposer directement).
+      - "127.0.0.1:${PORT:-4000}:4000"
+    volumes:
+      - uploads:/usr/src/app/uploads
+    networks:
+      - ankkata_net
+
+  adminer:
+    image: adminer:latest
+    container_name: ankkata_adminer
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    ports:
+      # Idem : jamais exposé publiquement. Accès via tunnel SSH uniquement
+      # (voir DEPLOYMENT.md).
+      - "127.0.0.1:${ADMINER_PORT:-8080}:8080"
+    networks:
+      - ankkata_net
+
+  # Reverse proxy + HTTPS automatique (Let's Encrypt) pour un déploiement VPS
+  # public. Ne démarre pas avec un simple `docker compose up` local — voir
+  # DEPLOYMENT.md pour l'activer avec `--profile prod`.
+  caddy:
+    image: caddy:2-alpine
+    container_name: ankkata_caddy
+    restart: unless-stopped
+    profiles:
+      - prod
+    depends_on:
+      - api
+    environment:
+      ANKKATA_DOMAIN: ${ANKKATA_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - ankkata_net
+
+networks:
+  ankkata_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:
