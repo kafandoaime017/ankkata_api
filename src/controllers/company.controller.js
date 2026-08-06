@@ -41,7 +41,7 @@ const lookupByActivationKey = catchAsync(async (req, res) => {
 
 const create = catchAsync(async (req, res) => {
   const donnees = { ...req.body };
-  if (!donnees.cleActivation) donnees.cleActivation = genererCleActivation(donnees.nom || 'compagnie');
+  if (!donnees.cleActivation) donnees.cleActivation = genererCleActivation();
   if (!donnees.code) donnees.code = `CIE-${Date.now()}`;
   if (!donnees.dateExpirationAbonnement) {
     // Colonne obligatoire en base mais jamais saisie depuis le formulaire de
@@ -89,7 +89,7 @@ const regenerateActivationKey = catchAsync(async (req, res) => {
   const company = await Company.findByPk(req.params.id);
   if (!company) throw ApiError.notFound('Compagnie introuvable.');
 
-  const nouvelleCle = genererCleActivation(company.nom);
+  const nouvelleCle = genererCleActivation();
   await company.update({ cleActivation: nouvelleCle });
   await enregistrerAudit({
     action: 'Régénération de clé d\'activation',
@@ -218,7 +218,20 @@ const updateBranding = catchAsync(async (req, res) => {
   res.json(company);
 });
 
-/** PATCH /companies/:id/status — { statut } parmi active/essai/suspendue/archivee */
+/**
+ * PATCH /companies/:id/status — { statut } parmi active/essai/suspendue/archivee
+ *
+ * IMPORTANT — la suspension (palier 3) et la résiliation (palier 4) sont
+ * TOUJOURS déclenchées ici par une action humaine explicite de l'équipe
+ * Ankkata, jamais par un job automatique (cette API n'en a d'ailleurs
+ * aucun) : voir services/abonnement.service.js. Un impayé au Burkina, c'est
+ * souvent un patron en déplacement ou un virement en retard — un appel
+ * règle 90% des cas et vaut mieux qu'une coupure surprise.
+ *
+ * La suspension elle-même ne coupe rien immédiatement : elle n'est
+ * vérifiée qu'à la connexion (voir auth.controller.js), jamais en cours de
+ * session — une vente en cours n'est donc jamais interrompue.
+ */
 const changeStatus = catchAsync(async (req, res) => {
   const company = await Company.findByPk(req.params.id);
   if (!company) throw ApiError.notFound('Compagnie introuvable.');
@@ -228,8 +241,24 @@ const changeStatus = catchAsync(async (req, res) => {
     throw ApiError.badRequest('Statut invalide.');
   }
 
-  await company.update({ statut });
-  const libelles = { active: 'Réactivation', suspendue: 'Suspension', archivee: 'Archivage', essai: 'Passage en essai' };
+  const donnees = { statut };
+  if (statut === 'suspendue' && company.statut !== 'suspendue') {
+    donnees.suspensionDemandeeAt = new Date();
+  }
+  if (statut === 'archivee' && company.statut !== 'archivee') {
+    donnees.resiliationAt = new Date();
+  }
+  // Réactivation (palier 3 -> actif) : "le jour où quelqu'un paie, il ne
+  // doit pas attendre" — on efface l'horodatage de suspension pour que le
+  // prochain calcul de palier reparte propre, et la levée est répercutée
+  // dès le prochain heartbeat/synchro (voir poste.controller.js#heartbeat),
+  // pas seulement à la prochaine connexion.
+  if (statut === 'active') {
+    donnees.suspensionDemandeeAt = null;
+  }
+
+  await company.update(donnees);
+  const libelles = { active: 'Réactivation', suspendue: 'Suspension', archivee: 'Archivage (résiliation)', essai: 'Passage en essai' };
   await enregistrerAudit({
     action: `${libelles[statut]} de compagnie`,
     details: `Compagnie "${company.nom}" : statut changé en "${statut}".`,

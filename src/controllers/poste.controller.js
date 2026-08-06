@@ -18,7 +18,8 @@ const ApiError = require('../utils/ApiError');
 const env = require('../config/env');
 const { ESPACES } = require('../constants/roles');
 const { resolveCompanyId } = require('../middlewares/auth.middleware');
-const { calculerStatut, POIDS_STATUT, purgerHeartbeatsAnciens } = require('../services/poste.service');
+const { calculerStatut, POIDS_STATUT, purgerHeartbeatsAnciens, resolvePoste } = require('../services/poste.service');
+const { suspensionActive } = require('../services/abonnement.service');
 
 const INCLUDE = [
   { model: Company, as: 'company', attributes: ['id', 'nom'] },
@@ -130,10 +131,7 @@ const heartbeat = catchAsync(async (req, res) => {
   const derniereErreur = req.body.derniereErreur || req.body.derniere_erreur || null;
   const agenceId = req.auth?.agenceId || null;
 
-  const [poste] = await Poste.findOrCreate({
-    where: { companyId, machineId },
-    defaults: { companyId, machineId, agenceId, versionApp, osInfo },
-  });
+  const poste = await resolvePoste({ companyId, machineId, agenceId });
 
   const champs = {
     versionApp,
@@ -160,7 +158,16 @@ const heartbeat = catchAsync(async (req, res) => {
   // Purge best-effort — une erreur ici ne doit jamais faire échouer le heartbeat.
   purgerHeartbeatsAnciens(poste.id).catch(() => {});
 
-  res.json({ ok: true, versionDisponible: env.latestAppVersion });
+  // Réactivation rapide (voir company.controller.js#changeStatus) : la
+  // LEVÉE d'une suspension se répercute dès ce heartbeat, pas seulement à
+  // la prochaine connexion — "le jour où quelqu'un paie, il ne doit pas
+  // attendre". La suspension elle-même, à l'inverse, n'est jamais lue ici :
+  // seule la connexion (auth.controller.js) peut la faire prendre effet,
+  // pour ne jamais couper une session en cours.
+  const company = await Company.findByPk(companyId, { attributes: ['id', 'statut'] });
+  const compagnieSuspendue = company ? suspensionActive(company) : false;
+
+  res.json({ ok: true, versionDisponible: env.latestAppVersion, compagnieSuspendue });
 });
 
 module.exports = { listGlobal, listForCompany, getOne, marquerResolu, heartbeat };

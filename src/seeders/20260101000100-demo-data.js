@@ -232,9 +232,12 @@ module.exports = {
           companyId: compagnie1.id,
           agenceId: agence1a.id,
           immatriculation: '11 BF 3421',
+          // Capacité réaliste d'un Sprinter (~19 places), pas 53 — l'ancienne
+          // valeur laissait croire à un gros car alors que le véhicule saisi
+          // est un minibus.
           marqueModele: 'Mercedes-Benz Sprinter',
-          capaciteStandard: 45,
-          capaciteVip: 8,
+          capaciteStandard: 15,
+          capaciteVip: 4,
           etat: 'en_service',
           dateMiseEnService: '2023-05-01',
         },
@@ -249,6 +252,8 @@ module.exports = {
           villeArrivee: 'Bobo-Dioulasso',
           busId: bus1.id,
           dureeEstimeeMinutes: 300,
+          // Aligné sur la capacité réelle du bus assigné (15 Standard + 4 VIP).
+          capaciteTotale: 19,
         },
         { transaction },
       );
@@ -294,6 +299,7 @@ module.exports = {
           agenceDepartId: agence1a.id,
           villeArrivee: 'Koudougou',
           dureeEstimeeMinutes: 90,
+          capaciteTotale: 50,
         },
         { transaction },
       );
@@ -543,6 +549,7 @@ module.exports = {
           agenceDepartId: agence2a.id,
           villeArrivee: 'Banfora',
           dureeEstimeeMinutes: 80,
+          capaciteTotale: 50,
         },
         { transaction },
       );

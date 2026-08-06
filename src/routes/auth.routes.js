@@ -5,6 +5,7 @@ const { authenticate } = require('../middlewares/auth.middleware');
 const router = Router();
 
 router.post('/ankkata/login', authController.loginAnkkata);
+router.post('/ankkata/2fa/login', authController.loginAnkkata2fa);
 router.post('/admin/login', authController.loginAdmin);
 router.post('/guichetier/login', authController.loginGuichetier);
 router.post('/refresh', authController.refresh);

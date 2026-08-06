@@ -26,25 +26,32 @@ function generateDatedReference(prefix, date = new Date()) {
   return `${prefix}-${yyyy}-${mm}-${dd}-${suffixeAleatoire(5)}`;
 }
 
-/** Clé d'activation compagnie, ex: genererCleActivation('Rafiq Voyages') -> "RAFIQ-VOYAGES-7K2Q9X" */
-// Plage Unicode "Combining Diacritical Marks" (U+0300 à U+036F), construite
-// via des points de code explicites (String.fromCharCode) pour éviter tout
-// souci d'encodage de caractères combinants directement dans le fichier
-// source (un caractère combinant littéral dans le code source rendrait le
-// fichier fragile selon l'éditeur/l'encodage).
-const REGEX_DIACRITIQUES = new RegExp(
-  `[${String.fromCharCode(0x0300)}-${String.fromCharCode(0x036f)}]`,
-  'g'
-);
+/**
+ * Clé d'activation compagnie — entièrement aléatoire, AUCUN lien avec le nom
+ * de la compagnie (contrairement à l'ancienne version qui préfixait avec le
+ * nom, ex. "RAFIQ-VOYAGES-7K2Q9X" : lisible mais devinable/prévisible, et
+ * gênant si la compagnie change de raison sociale).
+ *
+ * Alphabet "Crockford-like" — 23456789ABCDEFGHJKMNPQRSTVWXYZ — qui exclut
+ * volontairement 0/O, 1/I/L : des paires visuellement confondables une fois
+ * dictées au téléphone ou tapées à la main par un guichetier.
+ *
+ * Format : 3 blocs de 4 caractères séparés par des tirets, ex.
+ * "7K3Q-XM4R-9BCD" (12 caractères utiles, ~62 bits d'entropie — largement
+ * suffisant pour un code à durée de vie courte, voir expiration 7 jours).
+ */
+const ALPHABET_ACTIVATION = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-function genererCleActivation(nom) {
-  const prefixe = nom
-    .normalize('NFD')
-    .replace(REGEX_DIACRITIQUES, '') // retire les diacritiques (é -> e, etc.)
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return `${prefixe}-${suffixeAleatoire(6)}`;
+function genererCleActivation() {
+  const blocs = [];
+  for (let b = 0; b < 3; b += 1) {
+    let bloc = '';
+    for (let i = 0; i < 4; i += 1) {
+      bloc += ALPHABET_ACTIVATION[Math.floor(Math.random() * ALPHABET_ACTIVATION.length)];
+    }
+    blocs.push(bloc);
+  }
+  return blocs.join('-');
 }
 
 /** Génère un code PIN numérique à 6 chiffres. */
@@ -52,9 +59,31 @@ function genererCodePin() {
   return String(100000 + Math.floor(Math.random() * 900000));
 }
 
+/**
+ * Référence de billet séquentielle PAR POSTE — remplace l'ancien suffixe
+ * aléatoire de `generateDatedReference('TCK')` pour les ventes rattachées à
+ * un poste identifié (voir controllers/vente.controller.js#create et
+ * services/poste.service.js#resolvePoste).
+ *
+ * Format : `TCK-{codePoste}-{yyyyMMdd}-{numéro sur 6 chiffres}`, ex.
+ * "TCK-P03-20260803-000147". L'intérêt par rapport à un suffixe aléatoire :
+ * `numero` vient d'un compteur qui n'incrémente JAMAIS que de 1 en 1 et ne
+ * revient jamais en arrière — un trou dans la séquence d'un poste donné
+ * (ex. 000147 puis 000150) est donc un signal direct de vente perdue ou
+ * falsifiée, détectable d'un coup d'œil sur le relevé de ce poste.
+ */
+function genererReferenceTicket({ codePoste, numero, date = new Date() }) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const numeroFormate = String(numero).padStart(6, '0');
+  return `TCK-${codePoste}-${yyyy}${mm}${dd}-${numeroFormate}`;
+}
+
 module.exports = {
   generateCode,
   generateDatedReference,
   genererCleActivation,
   genererCodePin,
+  genererReferenceTicket,
 };

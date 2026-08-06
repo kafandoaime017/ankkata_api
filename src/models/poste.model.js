@@ -12,6 +12,16 @@ module.exports = (sequelize, DataTypes) => {
       companyId: { type: DataTypes.UUID, allowNull: false },
       agenceId: { type: DataTypes.UUID, allowNull: true },
       machineId: { type: DataTypes.STRING, allowNull: false },
+      // Code court lisible ("P01", "P02"...), attribué séquentiellement par
+      // compagnie à la création du poste — voir
+      // services/poste.service.js#resolvePoste. Sert de segment dans la
+      // référence de billet séquentielle par poste (utils/idGenerator.js).
+      code: { type: DataTypes.STRING, allowNull: true },
+      // Compteur de tickets propre à ce poste, incrémenté atomiquement (SQL
+      // `+1`, jamais lu-puis-réécrit côté appli) à chaque vente — voir
+      // controllers/vente.controller.js#create. Ne repart jamais à zéro : un
+      // trou dans la séquence est le signal de fraude/perte recherché.
+      dernierNumeroTicket: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
       libelle: { type: DataTypes.STRING, allowNull: true },
       versionApp: { type: DataTypes.STRING, allowNull: true },
       osInfo: { type: DataTypes.STRING, allowNull: true },

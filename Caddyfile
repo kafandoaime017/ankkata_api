@@ -1,6 +1,8 @@
 # Reverse proxy pour l'API Ankkata sur un VPS public.
-# Ne sert PAS en développement local (voir docker-compose.yml : le service
-# "caddy" n'est démarré qu'avec --profile prod, voir DEPLOYMENT.md).
+# Le service "caddy" démarre par défaut avec `docker compose up` (voir
+# docker-compose.yml). Sans ANKKATA_DOMAIN configuré, il sert simplement en
+# HTTP sur "localhost" et n'a aucun effet tant que vous n'avez pas suivi
+# DEPLOYMENT.md "Passer en HTTPS" — vous pouvez l'ignorer jusque-là.
 #
 # ------------------------------------------------------------------
 # Mode "domaine" (recommandé — HTTPS automatique via Let's Encrypt) :

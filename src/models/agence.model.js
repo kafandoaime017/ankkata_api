@@ -24,6 +24,7 @@ module.exports = (sequelize, DataTypes) => {
     Agence.belongsTo(models.Company, { foreignKey: 'companyId', as: 'company' });
     Agence.hasMany(models.Bus, { foreignKey: 'agenceId', as: 'buses' });
     Agence.hasMany(models.Ligne, { foreignKey: 'agenceDepartId', as: 'lignesDepart' });
+    Agence.hasMany(models.Ligne, { foreignKey: 'agenceArriveeId', as: 'lignesArrivee' });
     Agence.hasMany(models.Guichetier, { foreignKey: 'agenceId', as: 'guichetiers' });
     Agence.hasMany(models.Trip, { foreignKey: 'agenceDepartId', as: 'trips' });
     Agence.hasMany(models.Reservation, { foreignKey: 'agenceId', as: 'reservations' });

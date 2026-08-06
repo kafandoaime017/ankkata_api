@@ -15,6 +15,13 @@ module.exports = (sequelize, DataTypes) => {
       role: { type: DataTypes.ENUM(...Object.values(ROLE_ANKKATA)), allowNull: false },
       actif: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
       photoInitiales: { type: DataTypes.STRING, allowNull: true },
+      // Double authentification (TOTP) — voir services/twoFactor.service.js.
+      // `deuxFaSecret` est écrit dès /2fa/setup (avant confirmation), mais
+      // `deuxFaActif` ne passe à true qu'après un premier code vérifié
+      // (/2fa/confirmer) : impossible d'activer "à moitié".
+      deuxFaSecret: { type: DataTypes.STRING, allowNull: true },
+      deuxFaActif: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      deuxFaVerifieAt: { type: DataTypes.DATE, allowNull: true },
     },
     {
       tableName: 'comptes_ankkata',

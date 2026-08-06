@@ -8,14 +8,13 @@ services:
       POSTGRES_USER: ${DB_USER:-ankkata}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-ankkata_secret}
     ports:
-      # Exposé publiquement sur le port 4003 (choix explicite du déploiement
-      # sur 31.97.55.208) — voir DEPLOYMENT.md. ATTENTION : PostgreSQL est
-      # alors joignable depuis tout Internet sur ce port. Un DB_PASSWORD
-      # fort dans .env est donc IMPÉRATIF (pas la valeur par défaut du
-      # dépôt). Envisagez de restreindre ce port par IP source dans le
-      # pare-feu du VPS (ufw) si vous connaissez les IP qui doivent y
-      # accéder.
-      - "4003:5432"
+      # Lié à 127.0.0.1 UNIQUEMENT — PostgreSQL n'est plus joignable depuis
+      # Internet, seulement depuis le VPS lui-même (ex. `psql` en local sur
+      # la machine, ou un tunnel SSH `ssh -L 4003:localhost:4003 vps`). Avant
+      # ce correctif, ce port était ouvert à tout Internet (0.0.0.0), ce qui
+      # rendait la base attaquable directement si le mot de passe était
+      # faible — voir DEPLOYMENT.md "Sécurité".
+      - "127.0.0.1:4003:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -52,11 +51,50 @@ services:
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-10}
       LATEST_APP_VERSION: ${LATEST_APP_VERSION:-1.0.0}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
+      # Notifications voyageur (OTP de connexion + confirmation de réservation)
+      # — voir .env.example pour le détail de chaque variable. Ne rien
+      # configurer ici laisse le SMS "Sandbox" Africa's Talking par défaut,
+      # qui échoue proprement (sans casser l'app) tant qu'aucune clé n'est
+      # renseignée : voir services/notification/index.js.
+      CANAL_NOTIFICATION: ${CANAL_NOTIFICATION:-sms}
+      SMS_PROVIDER: ${SMS_PROVIDER:-africastalking}
+      SENT_API_KEY: ${SENT_API_KEY:-}
+      SENT_TEMPLATE_ID: ${SENT_TEMPLATE_ID:-}
+      SENT_TEMPLATE_VARIABLE: ${SENT_TEMPLATE_VARIABLE:-texte}
+      AFRICASTALKING_USERNAME: ${AFRICASTALKING_USERNAME:-sandbox}
+      AFRICASTALKING_API_KEY: ${AFRICASTALKING_API_KEY:-}
+      AFRICASTALKING_SENDER_ID: ${AFRICASTALKING_SENDER_ID:-}
+      AFRICASTALKING_SANDBOX: ${AFRICASTALKING_SANDBOX:-true}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-Ankkata <no-reply@ankkata.com>}
     ports:
-      # Exposé publiquement sur le port 4002 — l'API est directement
-      # joignable sur http://31.97.55.208:4002/api/v1, sans passer par
-      # Caddy/HTTPS (choix explicite de ce déploiement, voir DEPLOYMENT.md).
-      - "4002:4000"
+      # Port hôte 4002 (et NON 4000, qui n'est que le port interne au
+      # conteneur — voir PORT ci-dessus) : c'est ce port 4002 que les
+      # postes guichet déjà déployés ont réellement dans leur configuration
+      # (`--dart-define=API_BASE_URL=http://31.97.55.208:4002/api/v1`, voir
+      # `CLIENT_BUILD.md`). Une précédente version de ce fichier mappait par
+      # erreur "4000:4000", ce qui aurait rendu l'API injoignable au bon
+      # endroit pour ces postes — corrigé ici pour rester cohérent avec
+      # DEPLOYMENT.md et CLIENT_BUILD.md.
+      #
+      # ATTENTION — encore exposé publiquement en HTTP simple : le JWT et
+      # les mots de passe circulent en clair sur le réseau. Voir "caddy"
+      # ci-dessous (démarre maintenant par défaut, prêt à servir en HTTPS)
+      # et DEPLOYMENT.md "Passer en HTTPS" pour la marche à suivre complète :
+      # une fois un nom de domaine configuré et le nouveau chemin HTTPS
+      # confirmé fonctionnel (tous les postes guichet reconfigurés sur
+      # "https://votre-domaine.com/api/v1"), ce port devrait être restreint
+      # à "127.0.0.1:4002:4000" pour ne plus laisser d'accès direct non
+      # chiffré.
+      - "4000:4000"
     volumes:
       - uploads:/usr/src/app/uploads
     networks:
@@ -71,26 +109,27 @@ services:
     environment:
       ADMINER_DEFAULT_SERVER: db
     ports:
-      # Exposé publiquement sur le port 4004 — http://31.97.55.208:4004.
-      # Adminer donne un accès direct à la base de données via son
-      # interface web : protégez-vous au moins avec un mot de passe DB fort
-      # (voir service "db" ci-dessus) tant qu'aucune authentification
-      # supplémentaire n'est ajoutée devant.
-      - "4004:8080"
+      # Lié à 127.0.0.1 UNIQUEMENT (voir service "db" ci-dessus) — Adminer
+      # donne un accès direct (interface web) à toute la base de données,
+      # il ne doit jamais être joignable depuis Internet. Utilisez un tunnel
+      # SSH (`ssh -L 4004:localhost:4004 vps`) puis http://localhost:4004
+      # en local pour y accéder.
+      - "127.0.0.1:4004:8080"
     networks:
       - ankkata_net
 
-  # Reverse proxy + HTTPS automatique (Let's Encrypt) — NON UTILISÉ dans ce
-  # déploiement (API/DB/Adminer exposés directement sur 4002/4003/4004, voir
-  # ci-dessus). Laissé ici, inactif par défaut (`profiles: [prod]`), pour le
-  # jour où vous voudrez passer sur un nom de domaine + HTTPS — voir
-  # DEPLOYMENT.md.
+  # Reverse proxy + HTTPS automatique (Let's Encrypt) — démarre PAR DÉFAUT
+  # (plus de `profiles: [prod]` à activer manuellement) : c'est désormais le
+  # seul point d'entrée public prévu, l'API/DB/Adminer ne sont plus exposés
+  # directement (voir les ports "127.0.0.1:..." ci-dessus). Sans domaine
+  # configuré (ANKKATA_DOMAIN vide), Caddy sert en HTTP simple sur
+  # "localhost" — voir Caddyfile et DEPLOYMENT.md "Passer en HTTPS" pour la
+  # configuration avec un vrai nom de domaine, seule façon d'obtenir un
+  # certificat HTTPS valide.
   caddy:
     image: caddy:2-alpine
     container_name: ankkata_caddy
     restart: unless-stopped
-    profiles:
-      - prod
     depends_on:
       - api
     environment:

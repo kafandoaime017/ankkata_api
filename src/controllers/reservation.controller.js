@@ -1,10 +1,11 @@
 // Réservations (en ligne ou guichet) — gestion complète pour le personnel
 // de la compagnie, lecture seule pour Ankkata (supervision).
-const { Reservation, Client, Trip } = require('../models');
+const { sequelize, Reservation, Client, Trip } = require('../models');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const { enregistrerAudit } = require('../services/audit.service');
 const { generateDatedReference } = require('../utils/idGenerator');
+const { verifierEtVerrouillerQuota } = require('../services/quota.service');
 const { buildSearchWhere, getPagination, buildPaginatedResponse } = require('./helpers');
 
 const INCLUDE = [{ model: Client, as: 'client' }, { model: Trip, as: 'trip' }];
@@ -34,10 +35,29 @@ const getOne = catchAsync(async (req, res) => {
 });
 
 const create = catchAsync(async (req, res) => {
-  const reservation = await Reservation.create({
-    ...req.body,
-    reference: req.body.reference || generateDatedReference('RES'),
-    companyId: req.params.companyId,
+  // Même quota que pour une vente au guichet (voir `quota.service.js` et
+  // `vente.controller.js#create`) : une réservation occupe aussi une place
+  // sur le trajet, elle doit donc être comptée et refusée de la même façon
+  // si le trajet est déjà complet.
+  const reservation = await sequelize.transaction(async (transaction) => {
+    // Cette route n'est utilisée que par le guichet (l'app Voyageur passe par
+    // `public.controller.js#createReservation`) : `canal` vaut donc
+    // normalement toujours 'guichet' ; on retombe dessus par défaut si
+    // absent du payload plutôt que de ne vérifier aucun sous-quota.
+    await verifierEtVerrouillerQuota({
+      transaction,
+      tripId: req.body.tripId,
+      placesDemandees: 1,
+      canal: req.body.canal || 'guichet',
+    });
+    return Reservation.create(
+      {
+        ...req.body,
+        reference: req.body.reference || generateDatedReference('RES'),
+        companyId: req.params.companyId,
+      },
+      { transaction }
+    );
   });
   await enregistrerAudit({
     action: 'Création de réservation',

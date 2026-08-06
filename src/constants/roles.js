@@ -6,6 +6,11 @@ const ESPACES = {
   ANKKATA: 'ankkata',
   ADMIN: 'admin',
   GUICHETIER: 'guichetier',
+  // Compte voyageur (site public ankkata_frontend) — pas de compagnie ni de
+  // rôle associé, juste une identité permettant de retrouver "Mes trajets"
+  // sans ressaisir référence+téléphone à chaque fois. Voir
+  // voyageur.controller.js.
+  VOYAGEUR: 'voyageur',
 };
 
 // Rôles internes Ankkata — voir RoleAnkkataPermissions côté ankkata_admin.

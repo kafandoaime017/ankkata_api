@@ -5,6 +5,7 @@ const {
   authorize,
   enforceCompanyScope,
   canManageComptesCompagnie,
+  blockSiFonctionsNonUrgentesBloquees,
 } = require('../middlewares/auth.middleware');
 const { ESPACES } = require('../constants/roles');
 
@@ -14,7 +15,9 @@ router.use(authenticate, authorize(ESPACES.ANKKATA, ESPACES.ADMIN), enforceCompa
 
 router.get('/', controller.list);
 router.get('/:id', controller.getOne);
-router.post('/', canManageComptesCompagnie, controller.create);
+// Ajout de comptes guichetiers = fonction "non urgente" bloquée au palier 2
+// (impayé) — voir cahier des charges cycle de vie abonnement.
+router.post('/', canManageComptesCompagnie, blockSiFonctionsNonUrgentesBloquees, controller.create);
 router.patch('/:id', canManageComptesCompagnie, controller.update);
 router.post('/:id/reset-pin', canManageComptesCompagnie, controller.resetPin);
 router.patch('/:id/toggle-actif', canManageComptesCompagnie, controller.toggleActif);

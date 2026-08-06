@@ -4,6 +4,8 @@
 const { Company, CompteAnkkata, CompteAdmin, Guichetier } = require('../models');
 const passwordService = require('../services/password.service');
 const tokenService = require('../services/token.service');
+const twoFactorService = require('../services/twoFactor.service');
+const { resumeAbonnement, suspensionActive } = require('../services/abonnement.service');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const { ESPACES } = require('../constants/roles');
@@ -15,7 +17,16 @@ function emettreJetons(payload) {
   };
 }
 
-/** POST /auth/ankkata/login — { identifiant, motDePasse } */
+/**
+ * POST /auth/ankkata/login — { identifiant, motDePasse }
+ *
+ * Comptes de l'équipe Ankkata uniquement : accès à l'ensemble des
+ * compagnies clientes, donc la cible la plus sensible de la plateforme — si
+ * la 2FA est active sur ce compte (voir services/twoFactor.service.js), le
+ * mot de passe seul ne suffit PAS à obtenir un jeton d'accès. On renvoie à
+ * la place un jeton de "défi" de courte durée (5 min) que le client doit
+ * renvoyer avec le code TOTP à `POST /auth/ankkata/2fa/login`.
+ */
 const loginAnkkata = catchAsync(async (req, res) => {
   const { identifiant, motDePasse } = req.body;
   if (!identifiant || !motDePasse) throw ApiError.badRequest('Identifiant et mot de passe requis.');
@@ -25,6 +36,42 @@ const loginAnkkata = catchAsync(async (req, res) => {
 
   const motDePasseValide = await passwordService.compare(motDePasse, compte.motDePasseHash);
   if (!motDePasseValide) throw ApiError.unauthorized('Identifiants invalides.');
+
+  if (compte.deuxFaActif) {
+    res.json({ deuxFaRequis: true, defiToken: tokenService.signDefi2fa(compte.id) });
+    return;
+  }
+
+  const payload = { sub: compte.id, espace: ESPACES.ANKKATA, nom: compte.nom, role: compte.role, companyId: null };
+  res.json({ ...emettreJetons(payload), compte: { id: compte.id, nom: compte.nom, role: compte.role, identifiant: compte.identifiant } });
+});
+
+/**
+ * POST /auth/ankkata/2fa/login — { defiToken, code }
+ *
+ * Deuxième étape du login Ankkata quand la 2FA est active — voir
+ * [loginAnkkata]. `defiToken` prouve que le mot de passe vient d'être
+ * validé (courte durée de vie, ne porte ni `espace` ni `role`, donc
+ * inutilisable comme un vrai jeton d'accès même par erreur).
+ */
+const loginAnkkata2fa = catchAsync(async (req, res) => {
+  const { defiToken, code } = req.body;
+  if (!defiToken || !code) throw ApiError.badRequest('Jeton de défi et code requis.');
+
+  let decoded;
+  try {
+    decoded = tokenService.verifyDefi2fa(defiToken);
+  } catch (err) {
+    throw ApiError.unauthorized('Session de connexion expirée, recommencez.');
+  }
+
+  const compte = await CompteAnkkata.findByPk(decoded.sub);
+  if (!compte || !compte.actif) throw ApiError.unauthorized('Compte introuvable ou désactivé.');
+  if (!compte.deuxFaActif) throw ApiError.badRequest('La double authentification n\'est pas active sur ce compte.');
+
+  if (!twoFactorService.verifierCode(code, compte.deuxFaSecret)) {
+    throw ApiError.unauthorized('Code de vérification incorrect.');
+  }
 
   const payload = { sub: compte.id, espace: ESPACES.ANKKATA, nom: compte.nom, role: compte.role, companyId: null };
   res.json({ ...emettreJetons(payload), compte: { id: compte.id, nom: compte.nom, role: compte.role, identifiant: compte.identifiant } });
@@ -57,6 +104,12 @@ const loginAdmin = catchAsync(async (req, res) => {
     ...emettreJetons(payload),
     compte: { id: compte.id, nom: compte.nom, niveau: compte.niveau, identifiant: compte.identifiant },
     company: { id: company.id, code: company.code, nom: company.nom },
+    // Bandeau de dégradation progressive (paliers 1/2, purement informatif)
+    // + drapeau de suspension effective (palier 3) — voir
+    // services/abonnement.service.js. Vérifié UNIQUEMENT à la connexion,
+    // jamais en cours de session : voir avertissement dans changeStatus.
+    abonnement: resumeAbonnement(company),
+    compagnieSuspendue: suspensionActive(company),
   });
 });
 
@@ -88,6 +141,10 @@ const loginGuichetier = catchAsync(async (req, res) => {
     ...emettreJetons(payload),
     compte: { id: compte.id, nom: compte.nom, role: compte.role, identifiant: compte.identifiant, agenceId: compte.agenceId },
     company: { id: company.id, code: company.code, nom: company.nom },
+    // Voir loginAdmin — le guichetier n'a besoin que du drapeau de
+    // suspension effective (palier 3), jamais du détail des paliers 1/2
+    // (bandeau réservé à l'écran admin compagnie).
+    compagnieSuspendue: suspensionActive(company),
   });
 });
 
@@ -127,4 +184,4 @@ const me = catchAsync(async (req, res) => {
   res.json({ auth: req.auth });
 });
 
-module.exports = { loginAnkkata, loginAdmin, loginGuichetier, refresh, me };
+module.exports = { loginAnkkata, loginAnkkata2fa, loginAdmin, loginGuichetier, refresh, me };

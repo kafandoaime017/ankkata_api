@@ -28,8 +28,8 @@ class ApiError extends Error {
     return new ApiError(404, message);
   }
 
-  static conflict(message = 'Conflit avec l\'état actuel de la ressource.') {
-    return new ApiError(409, message);
+  static conflict(message = 'Conflit avec l\'état actuel de la ressource.', details = null) {
+    return new ApiError(409, message, details);
   }
 
   static internal(message = 'Erreur interne du serveur.') {

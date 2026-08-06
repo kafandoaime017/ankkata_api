@@ -7,6 +7,13 @@ const router = Router();
 
 router.use(authenticate, authorize(ESPACES.ANKKATA));
 
+// Auto-service 2FA — placé AVANT `/:id` pour éviter toute ambiguïté de
+// routage, et agit toujours sur `req.auth.sub` (jamais un id passé par le
+// client) : voir compteAnkkata.controller.js.
+router.post('/2fa/setup', controller.setup2fa);
+router.post('/2fa/confirmer', controller.confirmer2fa);
+router.post('/2fa/desactiver', controller.desactiver2fa);
+
 router.get('/', controller.list);
 router.get('/:id', controller.getOne);
 router.post('/', requirePeutGererComptesAnkkata, controller.create);

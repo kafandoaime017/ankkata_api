@@ -24,6 +24,11 @@ module.exports = (sequelize, DataTypes) => {
       plan: { type: DataTypes.ENUM(...PLAN_ABONNEMENT), allowNull: false, defaultValue: 'essai' },
       statut: { type: DataTypes.ENUM(...STATUT_COMPAGNIE), allowNull: false, defaultValue: 'essai' },
       dateExpirationAbonnement: { type: DataTypes.DATEONLY, allowNull: false },
+      // Cycle de vie de l'abonnement (dégradation progressive) — voir
+      // services/abonnement.service.js#calculerPalier.
+      montantDu: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+      suspensionDemandeeAt: { type: DataTypes.DATE, allowNull: true },
+      resiliationAt: { type: DataTypes.DATE, allowNull: true },
       notes: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
       enTeteTicket: { type: DataTypes.STRING, allowNull: true },
       piedPageTicket: {
