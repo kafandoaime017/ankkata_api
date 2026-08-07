@@ -68,11 +68,30 @@ function parseIdVirtuel(id) {
 const INCLUDE_LIGNE_PUBLIC = [
   { model: LigneTarif, as: 'tarifs' },
   { model: Agence, as: 'agenceDepart', required: true, where: { active: true } },
+  // required: false — `agenceArriveeId` reste optionnel sur `Ligne` (lignes
+  // historiques créées avant la migration `add-agence-arrivee-id-to-lignes`,
+  // voir ligne.model.js) : on ne veut jamais exclure un trajet de la
+  // recherche simplement parce que sa gare d'arrivée n'a pas encore été
+  // renseignée côté admin.
+  { model: Agence, as: 'agenceArrivee', required: false },
   { model: Company, as: 'company', required: true, where: { statut: { [Op.in]: COMPAGNIES_VISIBLES } } },
   // Arrêts intermédiaires ordonnés — utilisés pour la frise "itinéraire" du
   // détail trajet (voir app/trajets/[id]), purement informatif côté public.
   { model: LigneArret, as: 'arrets', separate: true, order: [['ordre', 'ASC']] },
 ];
+
+/** DTO gare public — nom + coordonnées (peuvent être `null`, une agence n'est
+ * pas toujours géolocalisée côté admin) pour construire un lien "itinéraire"
+ * vers Google Maps côté frontend, sans jamais exposer l'id/l'agence complète. */
+function dtoAgencePublique(agence) {
+  if (!agence) return null;
+  return {
+    nom: agence.nom,
+    ville: agence.ville,
+    latitude: agence.latitude !== null && agence.latitude !== undefined ? Number(agence.latitude) : null,
+    longitude: agence.longitude !== null && agence.longitude !== undefined ? Number(agence.longitude) : null,
+  };
+}
 
 /**
  * Disponibilité d'un `Trip` RÉELLEMENT matérialisé — même calcul que
@@ -183,7 +202,14 @@ async function construireResultat(ligne, date, heureDepartBrut, tripReel) {
     },
     ligneId: ligne.id,
     villeDepart: ligne.agenceDepart.ville,
-    agenceDepart: ligne.agenceDepart.nom,
+    // Objet (nom + coordonnées) plutôt qu'une simple chaîne — voir
+    // dtoAgencePublique ci-dessus : permet au frontend de proposer un lien
+    // "itinéraire vers la gare" (Google Maps) quand l'agence est
+    // géolocalisée. `agenceArrivee` peut être `null` (agence pas encore
+    // renseignée côté admin pour cette ligne) — `villeArrivee` (string,
+    // ci-dessous) reste alors la seule info fiable côté arrivée.
+    agenceDepart: dtoAgencePublique(ligne.agenceDepart),
+    agenceArrivee: dtoAgencePublique(ligne.agenceArrivee),
     villeArrivee: ligne.villeArrivee,
     date,
     heureDepart,
