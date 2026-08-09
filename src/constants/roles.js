@@ -11,6 +11,13 @@ const ESPACES = {
   // sans ressaisir référence+téléphone à chaque fois. Voir
   // voyageur.controller.js.
   VOYAGEUR: 'voyageur',
+  // Agent de contrôle (embarquement) — rattaché à une compagnie + une
+  // agence précise comme un guichetier, mais volontairement un modèle et un
+  // espace JWT À PART (voir models/agentControle.model.js) : cet agent n'a
+  // besoin d'aucun accès vente/caisse/réservation, et un compte guichetier
+  // ne doit pas pouvoir se connecter à l'app mobile de contrôle. Voir
+  // controllers/embarquement.controller.js.
+  CONTROLE: 'controle',
 };
 
 // Rôles internes Ankkata — voir RoleAnkkataPermissions côté ankkata_admin.

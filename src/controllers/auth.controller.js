@@ -1,7 +1,7 @@
 // Trois flux de connexion distincts (un par espace), qui aboutissent tous
 // au même format de jeton — voir middlewares/auth.middleware.js pour la
 // lecture de ce jeton côté serveur.
-const { Company, CompteAnkkata, CompteAdmin, Guichetier } = require('../models');
+const { Company, CompteAnkkata, CompteAdmin, Guichetier, AgentControle, Agence } = require('../models');
 const passwordService = require('../services/password.service');
 const tokenService = require('../services/token.service');
 const twoFactorService = require('../services/twoFactor.service');
@@ -148,6 +148,56 @@ const loginGuichetier = catchAsync(async (req, res) => {
   });
 });
 
+/**
+ * POST /auth/controle/login — { cleActivation, identifiant, codePin }
+ *
+ * App mobile "agent de contrôle" (scan/embarquement) — même mécanique que
+ * [loginGuichetier] (clé d'activation + identifiant + PIN haché, message
+ * d'erreur générique, pas d'énumération d'identifiant), mais un modèle et un
+ * espace JWT à part (voir constants/roles.js#ESPACES.CONTROLE et
+ * models/agentControle.model.js) : ce compte n'a accès qu'aux routes
+ * d'embarquement, jamais à la vente/caisse/réservation. `agence` est
+ * renvoyée en clair dans la réponse (nom de la gare) car l'agent ne la
+ * choisit jamais lui-même — elle vient uniquement de son compte.
+ */
+const loginControle = catchAsync(async (req, res) => {
+  const { cleActivation, identifiant, codePin } = req.body;
+  if (!cleActivation || !identifiant || !codePin) {
+    throw ApiError.badRequest('Clé d\'activation, identifiant et code PIN requis.');
+  }
+
+  const company = await Company.findOne({ where: { cleActivation } });
+  if (!company) throw ApiError.unauthorized('Clé d\'activation inconnue.');
+
+  const compte = await AgentControle.findOne({ where: { companyId: company.id, identifiant }, include: [{ model: Agence, as: 'agence' }] });
+  if (!compte || !compte.actif) throw ApiError.unauthorized('Identifiants invalides ou compte désactivé.');
+
+  const codePinValide = await passwordService.compare(codePin, compte.codePinHash);
+  if (!codePinValide) throw ApiError.unauthorized('Code PIN invalide.');
+
+  const payload = {
+    sub: compte.id,
+    espace: ESPACES.CONTROLE,
+    nom: compte.nom,
+    agenceId: compte.agenceId,
+    companyId: company.id,
+  };
+  res.json({
+    ...emettreJetons(payload),
+    compte: { id: compte.id, nom: compte.nom, identifiant: compte.identifiant, agenceId: compte.agenceId, agenceNom: compte.agence?.nom || null },
+    company: {
+      id: company.id,
+      code: company.code,
+      nom: company.nom,
+      logoPath: company.logoPath,
+      couleurPrimaire: company.couleurPrimaire,
+      couleurSecondaire: company.couleurSecondaire,
+    },
+    // Voir loginGuichetier — même drapeau, même raisonnement.
+    compagnieSuspendue: suspensionActive(company),
+  });
+});
+
 /** POST /auth/refresh — { refreshToken } */
 const refresh = catchAsync(async (req, res) => {
   const { refreshToken } = req.body;
@@ -160,7 +210,12 @@ const refresh = catchAsync(async (req, res) => {
     throw ApiError.unauthorized('Jeton de rafraîchissement invalide ou expiré.');
   }
 
-  const modeleParEspace = { [ESPACES.ANKKATA]: CompteAnkkata, [ESPACES.ADMIN]: CompteAdmin, [ESPACES.GUICHETIER]: Guichetier };
+  const modeleParEspace = {
+    [ESPACES.ANKKATA]: CompteAnkkata,
+    [ESPACES.ADMIN]: CompteAdmin,
+    [ESPACES.GUICHETIER]: Guichetier,
+    [ESPACES.CONTROLE]: AgentControle,
+  };
   const Modele = modeleParEspace[decoded.espace];
   if (!Modele) throw ApiError.unauthorized('Espace inconnu.');
 
@@ -184,4 +239,4 @@ const me = catchAsync(async (req, res) => {
   res.json({ auth: req.auth });
 });
 
-module.exports = { loginAnkkata, loginAnkkata2fa, loginAdmin, loginGuichetier, refresh, me };
+module.exports = { loginAnkkata, loginAnkkata2fa, loginAdmin, loginGuichetier, loginControle, refresh, me };

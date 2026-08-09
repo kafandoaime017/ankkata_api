@@ -70,6 +70,20 @@ const CANAL_CONTACT_SUPPORT = ['telephone', 'email', 'whatsapp', 'en_personne', 
 // client (ankkata_admin, ankata_guichet, ankkata_frontend), CE fichier ne
 // fait qu'arbitrer quels codes sont valides — ne jamais renommer un code
 // existant sans migrer les lignes déjà enregistrées.
+// Contrôle à l'embarquement (voir migration `create-embarquements` et
+// `embarquement.controller.js`) — journal append-only, jamais modifié après
+// écriture (même logique que AuditLog/Pointage/CashMovement).
+//  - 'reservation'/'vente' : type de billet scanné/validé (les deux
+//    ressources ont leur propre table, voir Reservation/Vente).
+//  - 'scan'/'manuel' : le billet a été lu via la caméra, ou retrouvé et
+//    validé à la main (recherche par nom/référence) quand le scan échoue.
+//  - `statut` couvre TOUS les résultats possibles d'une tentative, pas
+//    seulement les succès — utile pour le compteur "signalés" côté agent et
+//    pour un futur audit compagnie.
+const TYPE_TICKET_EMBARQUEMENT = ['reservation', 'vente'];
+const SOURCE_EMBARQUEMENT = ['scan', 'manuel'];
+const STATUT_EMBARQUEMENT = ['embarque', 'deja_embarque', 'invalide', 'mauvais_voyage', 'annule'];
+
 const EQUIPEMENTS_LIGNE = [
   'climatisation',
   'wifi',
@@ -110,4 +124,7 @@ module.exports = {
   PRIORITE_SUPPORT_TICKET,
   CANAL_CONTACT_SUPPORT,
   EQUIPEMENTS_LIGNE,
+  TYPE_TICKET_EMBARQUEMENT,
+  SOURCE_EMBARQUEMENT,
+  STATUT_EMBARQUEMENT,
 };

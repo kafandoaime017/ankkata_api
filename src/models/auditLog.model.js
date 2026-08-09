@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
       auteurAnkkataId: { type: DataTypes.UUID, allowNull: true },
       auteurAdminId: { type: DataTypes.UUID, allowNull: true },
       auteurGuichetierId: { type: DataTypes.UUID, allowNull: true },
+      auteurAgentControleId: { type: DataTypes.UUID, allowNull: true },
       auteurNom: { type: DataTypes.STRING, allowNull: false, defaultValue: 'Système' },
       action: { type: DataTypes.STRING, allowNull: false },
       details: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
@@ -27,6 +28,7 @@ module.exports = (sequelize, DataTypes) => {
     AuditLog.belongsTo(models.CompteAnkkata, { foreignKey: 'auteurAnkkataId', as: 'auteurAnkkata' });
     AuditLog.belongsTo(models.CompteAdmin, { foreignKey: 'auteurAdminId', as: 'auteurAdmin' });
     AuditLog.belongsTo(models.Guichetier, { foreignKey: 'auteurGuichetierId', as: 'auteurGuichetier' });
+    AuditLog.belongsTo(models.AgentControle, { foreignKey: 'auteurAgentControleId', as: 'auteurAgentControle' });
   };
 
   return AuditLog;

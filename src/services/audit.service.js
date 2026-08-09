@@ -26,6 +26,7 @@ async function enregistrerAudit({ action, details, companyId = null, auteur = nu
     auteurAnkkataId: auteur?.espace === 'ankkata' ? auteur.sub : null,
     auteurAdminId: auteur?.espace === 'admin' ? auteur.sub : null,
     auteurGuichetierId: auteur?.espace === 'guichetier' ? auteur.sub : null,
+    auteurAgentControleId: auteur?.espace === 'controle' ? auteur.sub : null,
   };
   return AuditLog.create(entry);
 }

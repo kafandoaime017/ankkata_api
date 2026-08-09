@@ -28,6 +28,15 @@ module.exports = (sequelize, DataTypes) => {
       // `add-quota-overrides-to-trips` et `quota.service.js`.
       quotaEnLigneOverride: { type: DataTypes.INTEGER, allowNull: true, validate: { min: 0 } },
       quotaGuichetOverride: { type: DataTypes.INTEGER, allowNull: true, validate: { min: 0 } },
+      // Clôture de l'embarquement (app agent de contrôle) — voir migration
+      // `add-embarquement-cloture-to-trips` et
+      // `embarquement.controller.js#cloturer`. NULL = embarquement pas
+      // encore clôturé (ou pas concerné). Une fois renseigné, le scan reste
+      // possible côté serveur mais l'app agent désactive ses actions pour ce
+      // départ (badge "Clôturé") — évite un double comptage accidentel
+      // après le départ effectif du bus.
+      embarquementClotureAt: { type: DataTypes.DATE, allowNull: true },
+      embarquementCloturePar: { type: DataTypes.UUID, allowNull: true },
     },
     {
       tableName: 'trips',
@@ -42,6 +51,8 @@ module.exports = (sequelize, DataTypes) => {
     Trip.belongsTo(models.Bus, { foreignKey: 'busId', as: 'bus' });
     Trip.hasMany(models.Reservation, { foreignKey: 'tripId', as: 'reservations' });
     Trip.hasMany(models.Vente, { foreignKey: 'tripId', as: 'ventes' });
+    Trip.hasMany(models.Embarquement, { foreignKey: 'tripId', as: 'embarquements' });
+    Trip.belongsTo(models.AgentControle, { foreignKey: 'embarquementCloturePar', as: 'clotureParAgent' });
   };
 
   return Trip;

@@ -26,6 +26,7 @@ module.exports = (sequelize, DataTypes) => {
     Agence.hasMany(models.Ligne, { foreignKey: 'agenceDepartId', as: 'lignesDepart' });
     Agence.hasMany(models.Ligne, { foreignKey: 'agenceArriveeId', as: 'lignesArrivee' });
     Agence.hasMany(models.Guichetier, { foreignKey: 'agenceId', as: 'guichetiers' });
+    Agence.hasMany(models.AgentControle, { foreignKey: 'agenceId', as: 'agentsControle' });
     Agence.hasMany(models.Trip, { foreignKey: 'agenceDepartId', as: 'trips' });
     Agence.hasMany(models.Reservation, { foreignKey: 'agenceId', as: 'reservations' });
     Agence.hasMany(models.Vente, { foreignKey: 'agenceId', as: 'ventes' });

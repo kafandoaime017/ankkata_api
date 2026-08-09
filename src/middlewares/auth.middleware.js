@@ -150,6 +150,21 @@ function canOperateCompagnieOrAnkkataSupport(req, res, next) {
 }
 
 /**
+ * Actions d'embarquement (scan/validation manuelle/clôture) : admin,
+ * guichetier ET agent de contrôle — DÉLIBÉRÉMENT séparé de
+ * `canOperateCompagnie` : un agent de contrôle ne doit avoir accès à AUCUNE
+ * des autres routes protégées par `canOperateCompagnie` (vente, caisse,
+ * réservations, pointage...), donc on n'ajoute jamais `ESPACES.CONTROLE` à
+ * cette fonction partagée — seulement à cette version dédiée, utilisée
+ * uniquement sur les routes d'embarquement (voir trip.routes.js).
+ */
+function canOperateEmbarquement(req, res, next) {
+  const { espace } = req.auth || {};
+  if (espace === ESPACES.ADMIN || espace === ESPACES.GUICHETIER || espace === ESPACES.CONTROLE) return next();
+  return next(ApiError.forbidden('Réservé au personnel de la compagnie (y compris agents de contrôle).'));
+}
+
+/**
  * Palier 2 (impayé, J+1 à J+15+) — voir services/abonnement.service.js :
  * bloque uniquement les fonctions "non urgentes" (nouveaux trajets,
  * nouveaux comptes guichetiers, modification des tarifs) sur les routes qui
@@ -191,5 +206,6 @@ module.exports = {
   canManageComptesCompagnie,
   canOperateCompagnie,
   canOperateCompagnieOrAnkkataSupport,
+  canOperateEmbarquement,
   blockSiFonctionsNonUrgentesBloquees,
 };

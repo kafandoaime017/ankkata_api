@@ -49,6 +49,8 @@ module.exports = (sequelize, DataTypes) => {
     Company.hasMany(models.Ligne, { foreignKey: 'companyId', as: 'lignes' });
     Company.hasMany(models.CompteAdmin, { foreignKey: 'companyId', as: 'comptesAdmin' });
     Company.hasMany(models.Guichetier, { foreignKey: 'companyId', as: 'guichetiers' });
+    Company.hasMany(models.AgentControle, { foreignKey: 'companyId', as: 'agentsControle' });
+    Company.hasMany(models.Embarquement, { foreignKey: 'companyId', as: 'embarquements' });
     Company.hasMany(models.Client, { foreignKey: 'companyId', as: 'clients' });
     Company.hasMany(models.Trip, { foreignKey: 'companyId', as: 'trips' });
     Company.hasMany(models.Reservation, { foreignKey: 'companyId', as: 'reservations' });
