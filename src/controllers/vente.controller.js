@@ -303,4 +303,27 @@ const verifyColis = catchAsync(async (req, res) => {
   res.json(vente);
 });
 
-module.exports = { list, getOne, create, createAllerRetour, cancel, verifyColis };
+/**
+ * Suppression DÉFINITIVE d'une vente — distincte de `cancel` ci-dessus (qui
+ * ne fait que passer `annulee` à true en conservant la ligne, sans jamais
+ * ajuster les totaux de caisse déjà enregistrés). Réservée à un usage
+ * administratif ponctuel (ex. doublon, erreur de saisie) : ne recalcule PAS
+ * non plus la session de caisse liée (même choix que `cancel`, voir sa
+ * doc) — un écart doit être régularisé manuellement par un mouvement de
+ * caisse si nécessaire.
+ */
+const remove = catchAsync(async (req, res) => {
+  const vente = await Vente.findOne({ where: { id: req.params.id, companyId: req.params.companyId } });
+  if (!vente) throw ApiError.notFound('Vente introuvable.');
+
+  await vente.destroy();
+  await enregistrerAudit({
+    action: 'Suppression de vente',
+    details: `Vente ${vente.reference} (${vente.nomVoyageur}) supprimée définitivement.`,
+    companyId: req.params.companyId,
+    auteur: req.auth,
+  });
+  res.status(204).send();
+});
+
+module.exports = { list, getOne, create, createAllerRetour, cancel, verifyColis, remove };

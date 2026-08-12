@@ -12,8 +12,32 @@ module.exports = (sequelize, DataTypes) => {
       responsable: { type: DataTypes.STRING, allowNull: false, defaultValue: '' },
       telephone: { type: DataTypes.STRING, allowNull: false, defaultValue: '' },
       active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
-      latitude: { type: DataTypes.DECIMAL(9, 6), allowNull: true },
-      longitude: { type: DataTypes.DECIMAL(9, 6), allowNull: true },
+      // `DECIMAL` est sérialisé en STRING par le driver pg/Sequelize (évite
+      // toute perte de précision implicite) — sans ce getter, chaque route
+      // publique qui renvoie une agence (réservations, billet, mes
+      // réservations...) exposait `latitude`/`longitude` comme des chaînes,
+      // ce qui cassait `AgencePublique.fromJson` côté app mobile avec
+      // `type 'String' is not a subtype of type 'num?'`. Le getter est
+      // appliqué automatiquement par `toJSON()`/`JSON.stringify`, donc chaque
+      // route qui sérialise une instance Agence (directement ou imbriquée) en
+      // bénéficie sans avoir à y penser — plus besoin de caster au cas par
+      // cas comme le faisait seul `dtoAgencePublique`.
+      latitude: {
+        type: DataTypes.DECIMAL(9, 6),
+        allowNull: true,
+        get() {
+          const brut = this.getDataValue('latitude');
+          return brut === null || brut === undefined ? null : Number(brut);
+        },
+      },
+      longitude: {
+        type: DataTypes.DECIMAL(9, 6),
+        allowNull: true,
+        get() {
+          const brut = this.getDataValue('longitude');
+          return brut === null || brut === undefined ? null : Number(brut);
+        },
+      },
     },
     {
       tableName: 'agences',

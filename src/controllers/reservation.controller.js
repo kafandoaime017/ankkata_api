@@ -83,4 +83,26 @@ const cancel = catchAsync(async (req, res) => {
   res.json(reservation);
 });
 
-module.exports = { list, getOne, create, cancel };
+/**
+ * Suppression DÉFINITIVE d'une réservation — distincte de `cancel`
+ * ci-dessus (qui ne fait que passer le statut à "annulee" en conservant la
+ * ligne pour l'historique). Réservée à un usage administratif ponctuel
+ * (ex. doublon, erreur de saisie) : contrairement à l'annulation, cette
+ * action ne peut pas être vue par le voyageur ni tracée par référence après
+ * coup, seul le journal d'audit (ci-dessous) en garde une trace.
+ */
+const remove = catchAsync(async (req, res) => {
+  const reservation = await Reservation.findOne({ where: { id: req.params.id, companyId: req.params.companyId } });
+  if (!reservation) throw ApiError.notFound('Réservation introuvable.');
+
+  await reservation.destroy();
+  await enregistrerAudit({
+    action: 'Suppression de réservation',
+    details: `Réservation ${reservation.reference} (${reservation.nomVoyageur}) supprimée définitivement.`,
+    companyId: req.params.companyId,
+    auteur: req.auth,
+  });
+  res.status(204).send();
+});
+
+module.exports = { list, getOne, create, cancel, remove };

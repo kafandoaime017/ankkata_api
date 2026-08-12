@@ -238,6 +238,13 @@ const mesReservations = catchAsync(async (req, res) => {
   const reservations = await Reservation.findAll({
     where: { compteVoyageurId: req.auth.sub },
     order: [['dateReservation', 'DESC']],
+    // `subQuery: false` défensif : l'inclusion d'un hasMany (`Ligne.tarifs`)
+    // imbriqué à deux niveaux sous un belongsTo peut, selon la version de
+    // Sequelize, déclencher son wrapping automatique en sous-requête et
+    // produire un FROM/SELECT invalide — bug déjà rencontré et corrigé de la
+    // même façon ailleurs dans cette API (voir createReservationAllerRetour
+    // / lookup de réservations liées, tâches #530-532).
+    subQuery: false,
     include: [
       {
         model: Trip,

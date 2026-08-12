@@ -15,5 +15,6 @@ router.use(authenticate, authorize(ESPACES.ANKKATA, ESPACES.ADMIN, ESPACES.GUICH
 router.get('/', controller.list);
 router.post('/', canOperateCompagnie, controller.clockIn);
 router.post('/:id/clock-out', canOperateCompagnie, controller.clockOut);
+router.delete('/:id', canOperateCompagnie, controller.remove);
 
 module.exports = router;

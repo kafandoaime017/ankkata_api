@@ -3,6 +3,7 @@ const { Pointage, Guichetier, Agence, CashSession } = require('../models');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const { generateCode } = require('../utils/idGenerator');
+const { enregistrerAudit } = require('../services/audit.service');
 const { getPagination, buildPaginatedResponse } = require('./helpers');
 
 const INCLUDE = [
@@ -58,4 +59,25 @@ const clockOut = catchAsync(async (req, res) => {
   res.json(pointage);
 });
 
-module.exports = { list, clockIn, clockOut };
+/**
+ * Suppression DÉFINITIVE d'une session de pointage (dite "session de
+ * caisse" côté écran admin, voir pointage_screen.dart) — usage
+ * administratif ponctuel (ex. session de test, doublon). Ne touche PAS à la
+ * `CashSession` éventuellement liée (`cashSessionId`) : seule la ligne de
+ * pointage elle-même est supprimée, l'historique de caisse reste intact.
+ */
+const remove = catchAsync(async (req, res) => {
+  const pointage = await Pointage.findOne({ where: { id: req.params.id, companyId: req.params.companyId } });
+  if (!pointage) throw ApiError.notFound('Pointage introuvable.');
+
+  await pointage.destroy();
+  await enregistrerAudit({
+    action: 'Suppression de session de pointage',
+    details: `Pointage ${pointage.code} supprimé définitivement.`,
+    companyId: req.params.companyId,
+    auteur: req.auth,
+  });
+  res.status(204).send();
+});
+
+module.exports = { list, clockIn, clockOut, remove };

@@ -20,5 +20,6 @@ router.post('/', canOperateCompagnie, controller.create);
 router.post('/aller-retour', canOperateCompagnie, controller.createAllerRetour);
 router.post('/:id/cancel', canOperateCompagnie, controller.cancel);
 router.patch('/:id/verify-colis', canOperateCompagnie, controller.verifyColis);
+router.delete('/:id', canOperateCompagnie, controller.remove);
 
 module.exports = router;

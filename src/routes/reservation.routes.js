@@ -16,5 +16,6 @@ router.get('/', controller.list);
 router.get('/:id', controller.getOne);
 router.post('/', canOperateCompagnie, controller.create);
 router.post('/:id/cancel', canOperateCompagnie, controller.cancel);
+router.delete('/:id', canOperateCompagnie, controller.remove);
 
 module.exports = router;

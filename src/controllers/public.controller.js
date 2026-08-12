@@ -373,7 +373,23 @@ const listCompanies = catchAsync(async (req, res) => {
     attributes: ['id', 'code', 'nom', 'logoPath', 'couleurPrimaire', 'couleurSecondaire', 'ville', 'pays'],
     order: [['nom', 'ASC']],
   });
-  res.json({ compagnies });
+
+  // Nombre de lignes actives par compagnie — comptage à part (plutôt qu'un
+  // `include` + `group`) pour ne pas complexifier/risquer la requête
+  // principale ci-dessus ; utilisé par l'app voyageur pour afficher "X
+  // lignes actives" sur chaque carte compagnie plutôt qu'une simple liste
+  // nom + ville.
+  const compteurs = await Ligne.findAll({
+    attributes: ['companyId', [sequelize.fn('COUNT', sequelize.col('id')), 'total']],
+    where: { active: true, companyId: { [Op.in]: compagnies.map((c) => c.id) } },
+    group: ['companyId'],
+    raw: true,
+  });
+  const nombreLignesParCompagnie = new Map(compteurs.map((c) => [c.companyId, Number(c.total)]));
+
+  res.json({
+    compagnies: compagnies.map((c) => ({ ...c.toJSON(), nombreLignes: nombreLignesParCompagnie.get(c.id) ?? 0 })),
+  });
 });
 
 /**
