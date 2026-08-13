@@ -1,7 +1,7 @@
 // Ventes au guichet — création, annulation, vérification de colis. Chaque
 // vente réussie incrémente les totaux de la session de caisse ouverte de
 // l'agent (voir cashSession.controller.js pour la logique de caisse).
-const { sequelize, Vente, Client, Trip, Guichetier, CashSession } = require('../models');
+const { sequelize, Vente, Client, Trip, Guichetier, CashSession, Ligne } = require('../models');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const { enregistrerAudit } = require('../services/audit.service');
@@ -164,6 +164,18 @@ const create = catchAsync(async (req, res) => {
  * trajets est complet, TOUTE la vente est annulée (rollback de la
  * transaction) — le guichetier doit recommencer, éventuellement avec un
  * autre horaire retour.
+ *
+ * Réduction : même règle que `public.controller.js#createReservationAllerRetour`
+ * (voir sa doc de tête) — si les deux trajets appartiennent bien à la paire
+ * de lignes réversibles explicitement liée (`Ligne.ligneRetourId`) et que la
+ * compagnie a configuré un pourcentage (`Ligne.reductionAllerRetourPourcentage`),
+ * le prix unitaire combiné est réduit d'autant puis reparti entre les deux
+ * jambes au prorata de leur tarif brut respectif. Auparavant cette vente
+ * guichet n'appliquait AUCUNE réduction (contrairement au site voyageur) :
+ * les tarifs envoyés par le client étaient enregistrés tels quels — retour
+ * utilisateur : "souvent le trajet aller-retour a même son propre prix
+ * spécial". `prixUnitaireAvantReduction` garde le tarif normal pour
+ * affichage sur le reçu/billet quand une réduction a été appliquée.
  */
 const createAllerRetour = catchAsync(async (req, res) => {
   const {
@@ -210,6 +222,39 @@ const createAllerRetour = catchAsync(async (req, res) => {
     }
   }
 
+  // Résout la ligne de chaque trajet pour savoir si la réduction aller-retour
+  // s'applique (voir doc de tête) — lecture seule, hors transaction, comme
+  // `resoudreCreneauReservable` côté site voyageur.
+  const [tripAller, tripRetour] = await Promise.all([
+    Trip.findByPk(tripIdAller, { include: [{ model: Ligne, as: 'ligne' }] }),
+    Trip.findByPk(tripIdRetour, { include: [{ model: Ligne, as: 'ligne' }] }),
+  ]);
+  if (!tripAller || !tripRetour) {
+    throw ApiError.badRequest('Trajet aller ou retour introuvable.');
+  }
+
+  const sontPaireReversible = Boolean(tripAller.ligne?.ligneRetourId) && tripAller.ligne.ligneRetourId === tripRetour.ligne?.id;
+  const pourcentageReduction = sontPaireReversible ? tripAller.ligne.reductionAllerRetourPourcentage : null;
+
+  const totalBrutUnitaire = prixUnitaireAller + prixUnitaireRetour;
+  let prixUnitaireAllerFinal = prixUnitaireAller;
+  let prixUnitaireRetourFinal = prixUnitaireRetour;
+  let avantReductionAller = null;
+  let avantReductionRetour = null;
+
+  if (pourcentageReduction) {
+    const totalNetUnitaire = Math.round((totalBrutUnitaire * (100 - pourcentageReduction)) / 100);
+    // Répartition proportionnelle au poids de chaque jambe dans le tarif brut
+    // combiné (et non un simple partage 50/50) — reste cohérent même quand
+    // les deux classes de confort choisies ont des tarifs différents. Le
+    // reliquat d'arrondi est absorbé par la jambe retour, même convention que
+    // le site voyageur.
+    prixUnitaireAllerFinal = Math.round((totalNetUnitaire * prixUnitaireAller) / totalBrutUnitaire);
+    prixUnitaireRetourFinal = totalNetUnitaire - prixUnitaireAllerFinal;
+    avantReductionAller = prixUnitaireAller;
+    avantReductionRetour = prixUnitaireRetour;
+  }
+
   const referenceAller = reference || (await construireReference({ companyId: req.params.companyId, machineId: machineIdFinal }));
   const referenceRetour = await construireReference({ companyId: req.params.companyId, machineId: machineIdFinal });
 
@@ -225,7 +270,8 @@ const createAllerRetour = catchAsync(async (req, res) => {
       {
         ...communs,
         tripId: tripIdAller,
-        prixUnitaire: prixUnitaireAller,
+        prixUnitaire: prixUnitaireAllerFinal,
+        prixUnitaireAvantReduction: avantReductionAller,
         dateVoyage: dateVoyageAller,
         reference: referenceAller,
         idLocal: idLocalFinal,
@@ -239,7 +285,8 @@ const createAllerRetour = catchAsync(async (req, res) => {
       {
         ...communs,
         tripId: tripIdRetour,
-        prixUnitaire: prixUnitaireRetour,
+        prixUnitaire: prixUnitaireRetourFinal,
+        prixUnitaireAvantReduction: avantReductionRetour,
         dateVoyage: dateVoyageRetour,
         reference: referenceRetour,
         idLocal: null,

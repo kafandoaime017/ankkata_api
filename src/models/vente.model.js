@@ -42,6 +42,12 @@ module.exports = (sequelize, DataTypes) => {
       // `venteLieeId` pour être affichées/imprimées comme un seul billet.
       typeBillet: { type: DataTypes.ENUM(...TYPE_BILLET), allowNull: false, defaultValue: 'aller_simple' },
       venteLieeId: { type: DataTypes.UUID, allowNull: true },
+      // Prix unitaire AVANT réduction aller-retour (voir
+      // `Ligne.reductionAllerRetourPourcentage` et
+      // `vente.controller.js#createAllerRetour`) — `null` tant qu'aucune
+      // réduction n'a été appliquée à cette jambe. Permet d'afficher le tarif
+      // normal barré à côté du prix net sur le reçu/billet.
+      prixUnitaireAvantReduction: { type: DataTypes.INTEGER, allowNull: true },
     },
     {
       tableName: 'ventes',
