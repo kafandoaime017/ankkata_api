@@ -39,7 +39,12 @@ function normaliserErreur(err) {
 function errorHandler(err, req, res, next) {
   const erreur = normaliserErreur(err);
 
-  if (!erreur.isOperational && !env.isProduction) {
+  // Toujours logger côté serveur (visible via `docker compose logs api`),
+  // même en production — seul le MESSAGE renvoyé au client reste générique
+  // en prod (voir `normaliserErreur`). Avant ce correctif, une erreur 500 en
+  // production ne laissait absolument aucune trace exploitable dans les
+  // logs, rendant le diagnostic impossible à distance.
+  if (!erreur.isOperational) {
     console.error(err);
   }
 
